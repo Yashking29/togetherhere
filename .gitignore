@@ -1,0 +1,5 @@
+node_modules/
+rooms.json
+.env
+*.log
+.DS_Store
