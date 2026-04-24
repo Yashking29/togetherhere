@@ -9,6 +9,13 @@ const app        = express();
 const httpServer = createServer(app);
 const io         = new Server(httpServer, { cors: { origin: '*' } });
 
+/* ── Logging ── */
+function log(event, data) {
+  const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const parts = Object.entries(data || {}).map(([k, v]) => k + '=' + v).join(' ');
+  console.log('[' + ts + '] ' + event.padEnd(16) + (parts ? ' ' + parts : ''));
+}
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const rooms    = new Map();
@@ -34,7 +41,7 @@ function loadRooms() {
         createdAt: r.createdAt || now,
       });
     }
-    console.log(`Loaded ${rooms.size} room(s) from disk`);
+    log('ROOMS_LOADED', { count: rooms.size });
   } catch (_) {}
 }
 
@@ -87,7 +94,8 @@ setInterval(() => {
     const stale   = room.users.size === 0 && !room.videoId && !room.queue.length && !room.notes;
     if (expired || stale) { rooms.delete(id); removed++; }
   }
-  if (removed) { saveRooms(); console.log(`Cleaned up ${removed} stale room(s)`); }
+  log('HOURLY_STATS', { activeRooms: rooms.size, removed });
+  if (removed) saveRooms();
 }, 60 * 60 * 1000);
 
 /* ── Routes ── */
@@ -129,6 +137,7 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     currentRoom = roomId;
     saveRooms();
+    log('ROOM_CREATED', { roomId, name: myName, custom: !!options.customId, totalRooms: rooms.size });
     cb({ roomId });
   });
 
@@ -138,11 +147,15 @@ io.on('connection', (socket) => {
       cb = name; name = 'Partner'; // eslint-disable-line no-param-reassign
     }
     const room = rooms.get(roomId);
-    if (!room) return cb({ error: 'Room not found' });
+    if (!room) {
+      log('JOIN_FAILED', { roomId, name: name || 'Partner' });
+      return cb({ error: 'Room not found' });
+    }
     myName = name || 'Partner';
     room.users.add(socket.id);
     socket.join(roomId);
     currentRoom = roomId;
+    log('USER_JOINED', { roomId, name: myName, users: room.users.size });
     socket.to(roomId).emit('partner-joined', { name: myName });
     cb({
       success:       true,
@@ -180,6 +193,7 @@ io.on('connection', (socket) => {
     if (room.history.length > 50) room.history.shift();
     io.to(currentRoom).emit('history-update', { history: room.history });
     socket.to(currentRoom).emit('video-load', { videoId, videoType: room.videoType });
+    log('VIDEO_LOADED', { roomId: currentRoom, type: room.videoType, users: room.users.size });
     saveRooms();
   });
 
@@ -334,8 +348,8 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoom);
     if (!room) return;
     room.users.delete(socket.id);
+    log('USER_LEFT', { roomId: currentRoom, name: myName, remainingUsers: room.users.size });
     if (room.users.size === 0) {
-      // keep room on disk; only remove from memory if truly empty & no content
       if (!room.videoId && !room.queue.length && !room.notes) {
         rooms.delete(currentRoom);
         saveRooms();
@@ -348,5 +362,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
-  console.log(`Together is running → http://localhost:${PORT}`);
+  log('SERVER_START', { port: PORT, rooms: rooms.size });
 });

@@ -101,6 +101,18 @@ var watchHistory = [];
 /* Chat rate limit */
 var chatTimes = [];
 
+/* Session tracking */
+var roomJoinedAt = null;
+
+/* ═══════════════════════════════════
+   Analytics helper
+═══════════════════════════════════ */
+function logEvent(name, params) {
+  try {
+    if (typeof gtag === 'function') gtag('event', name, params || {});
+  } catch (_) {}
+}
+
 /* ═══════════════════════════════════
    Utilities
 ═══════════════════════════════════ */
@@ -381,6 +393,7 @@ document.getElementById('subtitle-file').addEventListener('change', function () 
   reader.onload = function (e) {
     var parsed = parseSrt(e.target.result);
     if (!parsed.length) { toast('Could not read subtitle file'); return; }
+    logEvent('subtitles_loaded', { entry_count: parsed.length });
     applySubtitles(parsed);
     socket.emit('subtitle-load', { subtitles: parsed });
     document.getElementById('subtitle-label').style.display     = 'none';
@@ -440,6 +453,7 @@ function toPixels(nx, ny) {
 
 function openDraw() {
   drawActive = true;
+  logEvent('draw_started');
   var canvas = document.getElementById('draw-canvas');
   canvas.classList.add('active');
   canvas.style.cursor = 'crosshair';
@@ -581,6 +595,7 @@ document.querySelectorAll('.reaction-btn').forEach(function (btn) {
   btn.addEventListener('click', function () {
     if (!currentRoom) { toast('Join a room first'); return; }
     var emoji = btn.dataset.emoji;
+    logEvent('reaction_sent', { emoji: emoji });
     socket.emit('reaction', { emoji: emoji });
     showReaction(emoji);
     playSound('reaction');
@@ -625,6 +640,7 @@ async function addToQueue(url) {
   if (!media) { toast('Unsupported URL — try YouTube, Vimeo or a .mp4 link'); return; }
   toast('Fetching title…');
   var title = await fetchTitle(media.type, media.id);
+  logEvent('queue_item_added', { video_type: media.type });
   socket.emit('queue-add', { item: { type: media.type, id: media.id, title: title, current: false } });
   toast('Added to queue ♡');
 }
@@ -692,8 +708,9 @@ document.getElementById('panel-toggle-btn').addEventListener('click', function (
    Enter room
 ═══════════════════════════════════ */
 function enterRoom(id, videoId, videoType, state, partnerOnline, initialQueue, initialNotes, initialSubs, incomingPartnerName, initialHistory) {
-  currentRoom = id;
-  partnerUp   = !!partnerOnline;
+  currentRoom  = id;
+  partnerUp    = !!partnerOnline;
+  roomJoinedAt = Date.now();
   if (incomingPartnerName) partnerName = incomingPartnerName;
   window.history.replaceState({}, '', '/?room=' + id);
   show('room');
@@ -832,6 +849,7 @@ async function startVoice() {
   try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
   catch (_) { toast('Microphone access denied'); return; }
   micOn = true; micMuted = false; updateMicUI();
+  logEvent('voice_started');
   if (partnerUp) { socket.emit('voice-start'); setTimeout(function () { buildPeer(true); }, 400); }
 }
 
@@ -839,7 +857,9 @@ function stopVoice() {
   if (peer)        { try { peer.destroy(); } catch (_) {} peer = null; }
   if (localStream) { localStream.getTracks().forEach(function (t) { t.stop(); }); localStream = null; }
   document.getElementById('remote-audio').srcObject = null;
-  micOn = false; micMuted = false; updateMicUI(); showPartnerVoice(false); socket.emit('voice-stop');
+  micOn = false; micMuted = false; updateMicUI(); showPartnerVoice(false);
+  logEvent('voice_stopped');
+  socket.emit('voice-stop');
 }
 
 function toggleMic() {
@@ -944,6 +964,10 @@ document.addEventListener('visibilitychange', function () {
 
 /* ── Cleanup WebRTC on page close ── */
 window.addEventListener('beforeunload', function () {
+  if (currentRoom && roomJoinedAt) {
+    var sessionSec = Math.round((Date.now() - roomJoinedAt) / 1000);
+    logEvent('session_end', { session_seconds: sessionSec, value: sessionSec });
+  }
   if (peer)        { try { peer.destroy(); }        catch (_) {} }
   if (camPeer)     { try { camPeer.destroy(); }     catch (_) {} }
   if (streamPeer)  { try { streamPeer.destroy(); }  catch (_) {} }
@@ -977,6 +1001,7 @@ document.getElementById('create-btn').addEventListener('click', function () {
     if (customId) opts.customId = customId;
     socket.emit('create-room', opts, function (res) {
       if (res && res.roomId) {
+        logEvent('room_created', { custom_id: !!customId });
         enterRoom(res.roomId, null, null, null, false, [], '', []);
       } else {
         btn.disabled = false; btn.textContent = 'Create a Room';
@@ -996,6 +1021,7 @@ document.getElementById('new-room-btn').addEventListener('click', function () {
 document.getElementById('copy-btn').addEventListener('click', function () {
   if (!currentRoom) return;
   var url = window.location.origin + '/?room=' + currentRoom;
+  logEvent('copy_invite_link');
   if (navigator.clipboard) {
     navigator.clipboard.writeText(url).then(function () { toast('Link copied — share it ♡'); }).catch(function () { prompt('Copy this link:', url); });
   } else { prompt('Copy this link:', url); }
@@ -1006,6 +1032,7 @@ async function handleLoad() {
   var media = detectMedia(url);
   if (!media) { toast('Unsupported URL — try YouTube, Vimeo or a .mp4 link'); return; }
   var title = await fetchTitle(media.type, media.id);
+  logEvent('video_loaded', { video_type: media.type });
   socket.emit('video-load', { videoId: media.id, videoType: media.type, title: title });
   loadMedia(media.id, media.type, false);
   document.getElementById('url-input').value = '';
@@ -1084,6 +1111,7 @@ async function startCam() {
   var lv = document.getElementById('local-cam');
   lv.srcObject = camStream; lv.play().catch(function () {});
   camOn = true;
+  logEvent('cam_started');
   document.getElementById('cam-btn').classList.add('active');
   document.getElementById('webcam-pip').classList.add('active');
   if (partnerUp) { socket.emit('cam-start'); setTimeout(function () { buildCamPeer(true); }, 400); }
@@ -1095,6 +1123,7 @@ function stopCam() {
   document.getElementById('remote-cam').srcObject = null;
   document.getElementById('local-cam').srcObject  = null;
   camOn = false;
+  logEvent('cam_stopped');
   document.getElementById('cam-btn').classList.remove('active');
   document.getElementById('webcam-pip').classList.remove('active');
   socket.emit('cam-stop');
@@ -1158,6 +1187,7 @@ function teardownStream() {
 
 socket.on('stream-start', function (d) {
   var name = (d && d.name) || 'Partner';
+  logEvent('screen_share_received');
   toast(name + ' is sharing their screen ♡');
   addSystemMsg(name + ' started screen sharing');
 
@@ -1256,8 +1286,10 @@ if (roomToJoin) {
         if (!res || res.error) {
           document.getElementById('room-name-error').style.display = 'block';
           document.getElementById('room-name-error').textContent = (res && res.error) || 'Room not found — the link may have expired.';
+          logEvent('room_join_failed', { error: (res && res.error) || 'not_found' });
           return;
         }
+        logEvent('room_joined', { partner_online: !!res.partnerOnline, has_video: !!res.videoId });
         enterRoom(roomToJoin, res.videoId, res.videoType, res.state, res.partnerOnline, res.queue || [], res.notes || '', res.subtitles || [], res.partnerName, res.history || []);
       });
     }
