@@ -133,7 +133,9 @@ document.getElementById('start-btn').addEventListener('click', async () => {
 document.getElementById('copy-btn').addEventListener('click', async () => {
   const s = await sendToContent({ action: 'status' });
   if (!s || !s.roomId) return;
-  const url = 'https://togetherhere.online/?room=' + s.roomId;
+  // Use current tab URL so partner lands on same video
+  const base = activeTab.url.split('?')[0];
+  const url  = base + '?together_room=' + s.roomId;
   navigator.clipboard.writeText(url).then(() => {
     const btn = document.getElementById('copy-btn');
     btn.textContent = '✓ Copied! ♡';

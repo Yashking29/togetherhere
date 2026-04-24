@@ -102,7 +102,10 @@
 
     hud.querySelector('#__tg_x').addEventListener('click', removeHud);
     hud.querySelector('#__tg_copy').addEventListener('click', () => {
-      const url = 'https://togetherhere.online/?room=' + roomId;
+      // Link = current video page + ?together_room=ID
+      // Person B clicks → lands on same video → extension auto-joins
+      const base = window.location.href.split('?')[0];
+      const url  = base + '?together_room=' + roomId;
       navigator.clipboard.writeText(url).catch(() => {});
       const btn = hud.querySelector('#__tg_copy');
       const prev = btn.textContent;
@@ -210,6 +213,24 @@
       }
     });
   }
+
+  /* ════════════════════════════
+     Auto-join from URL param
+     e.g. hotstar.com/watch/xyz?together_room=abc
+  ════════════════════════════ */
+  (function checkUrlParam() {
+    const param = new URLSearchParams(window.location.search).get('together_room');
+    if (!param) return;
+    // Clean the URL so refreshing doesn't re-join
+    const clean = window.location.href.replace(/[?&]together_room=[^&]+/, '').replace(/[?&]$/, '');
+    window.history.replaceState({}, '', clean);
+    // Load saved name then auto-join
+    chrome.storage.local.get(['tg_name'], data => {
+      const name = data.tg_name || 'Partner';
+      connect(name, param);
+      toast('Joining room… ♡');
+    });
+  })();
 
   /* ════════════════════════════
      Message bridge (popup ↔ content)
