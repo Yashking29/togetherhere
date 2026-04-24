@@ -5,12 +5,17 @@
 
   const SERVER = 'https://togetherhere.online';
 
-  let socket    = null;
-  let roomId    = null;
-  let myName    = 'Partner';
-  let syncLock  = false;
-  let video     = null;
-  let hud       = null;
+  let socket       = null;
+  let roomId       = null;
+  let myName       = 'Partner';
+  let syncLock     = false;
+  let video        = null;
+  let hud          = null;
+
+  /* Screen share state */
+  let screenPc     = null;
+  let screenStream = null;
+  let sharing      = false;
 
   /* ════════════════════════════
      Video detection
@@ -233,11 +238,98 @@
   })();
 
   /* ════════════════════════════
+     Screen sharing
+  ════════════════════════════ */
+  async function startSharing() {
+    if (sharing || !socket || !roomId) {
+      return { ok: false, error: sharing ? 'Already sharing' : 'Not in a room' };
+    }
+
+    // Ask background for a tab capture stream ID
+    const idRes = await new Promise(resolve => {
+      chrome.runtime.sendMessage({ action: 'get-stream-id' }, r => {
+        if (chrome.runtime.lastError) resolve({ error: chrome.runtime.lastError.message });
+        else resolve(r || { error: 'No response' });
+      });
+    });
+
+    if (!idRes.streamId) {
+      toast('Capture failed: ' + (idRes.error || 'unknown'));
+      return { ok: false, error: idRes.error };
+    }
+
+    try {
+      screenStream = await navigator.mediaDevices.getUserMedia({
+        video: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: idRes.streamId,
+          maxWidth: 1920, maxHeight: 1080, maxFrameRate: 30 } },
+        audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: idRes.streamId } }
+      });
+    } catch (e) {
+      toast('Capture error: ' + e.message);
+      return { ok: false, error: e.message };
+    }
+
+    sharing = true;
+
+    screenPc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }]
+    });
+    screenStream.getTracks().forEach(t => screenPc.addTrack(t, screenStream));
+
+    screenPc.onicecandidate = e => {
+      if (e.candidate && socket) {
+        socket.emit('stream-signal', {
+          type: 'candidate',
+          candidate: { candidate: e.candidate.candidate, sdpMid: e.candidate.sdpMid, sdpMLineIndex: e.candidate.sdpMLineIndex }
+        });
+      }
+    };
+
+    screenPc.onconnectionstatechange = () => {
+      const s = screenPc && screenPc.connectionState;
+      if (s === 'disconnected' || s === 'failed') stopSharing();
+    };
+
+    // Handle answer + ICE from receiver (web app)
+    socket.off('stream-signal');
+    socket.on('stream-signal', async d => {
+      if (!screenPc) return;
+      try {
+        if (d.type === 'answer') await screenPc.setRemoteDescription({ type: 'answer', sdp: d.sdp });
+        else if (d.type === 'candidate' && d.candidate) await screenPc.addIceCandidate(d.candidate);
+      } catch (_) {}
+    });
+
+    const offer = await screenPc.createOffer();
+    await screenPc.setLocalDescription(offer);
+
+    socket.emit('stream-start', { name: myName });
+    socket.emit('stream-signal', { type: 'offer', sdp: offer.sdp });
+
+    updateHud('Sharing screen ♡', true);
+    toast('Sharing your screen ♡');
+    return { ok: true };
+  }
+
+  function stopSharing() {
+    if (!sharing) return;
+    sharing = false;
+    if (screenPc) { try { screenPc.close(); } catch (_) {} screenPc = null; }
+    if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+    if (socket) {
+      socket.off('stream-signal');
+      socket.emit('stream-stop');
+    }
+    if (roomId) updateHud('Waiting for partner…', false);
+    toast('Screen sharing stopped');
+  }
+
+  /* ════════════════════════════
      Message bridge (popup ↔ content)
   ════════════════════════════ */
   chrome.runtime.onMessage.addListener((msg, _sender, respond) => {
     if (msg.action === 'status') {
-      respond({ roomId, connected: !!(socket && socket.connected), hasVideo: !!video });
+      respond({ roomId, connected: !!(socket && socket.connected), hasVideo: !!video, sharing });
       return true;
     }
     if (msg.action === 'create') {
@@ -249,9 +341,18 @@
       respond({ ok: true }); return true;
     }
     if (msg.action === 'leave') {
+      stopSharing();
       if (socket) { try { socket.disconnect(); } catch(_) {} socket = null; }
       removeHud(); roomId = null; video = null;
       chrome.storage.local.remove(['tg_room', 'tg_name']);
+      respond({ ok: true }); return true;
+    }
+    if (msg.action === 'share-screen') {
+      startSharing().then(res => respond(res));
+      return true;
+    }
+    if (msg.action === 'stop-share') {
+      stopSharing();
       respond({ ok: true }); return true;
     }
   });

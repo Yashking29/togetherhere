@@ -4,7 +4,7 @@
   "short_name": "Together",
   "version": "1.0.0",
   "description": "Watch Netflix, Prime Video, Disney+ and more in perfect sync with your partner.",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "tabCapture"],
   "host_permissions": [
     "*://*.netflix.com/*",
     "*://*.primevideo.com/*",

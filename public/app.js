@@ -92,6 +92,9 @@ var camPeer   = null;
 var camStream = null;
 var camOn     = false;
 
+/* Screen stream (received from extension) */
+var streamPeer = null;
+
 /* Watch history */
 var watchHistory = [];
 
@@ -941,8 +944,9 @@ document.addEventListener('visibilitychange', function () {
 
 /* ── Cleanup WebRTC on page close ── */
 window.addEventListener('beforeunload', function () {
-  if (peer)        { try { peer.destroy(); }    catch (_) {} }
-  if (camPeer)     { try { camPeer.destroy(); } catch (_) {} }
+  if (peer)        { try { peer.destroy(); }        catch (_) {} }
+  if (camPeer)     { try { camPeer.destroy(); }     catch (_) {} }
+  if (streamPeer)  { try { streamPeer.destroy(); }  catch (_) {} }
   if (localStream) localStream.getTracks().forEach(function (t) { t.stop(); });
   if (camStream)   camStream.getTracks().forEach(function (t) { t.stop(); });
 });
@@ -1132,6 +1136,73 @@ socket.on('cam-stop', function () {
   if (camPeer) { try { camPeer.destroy(); } catch (_) {} camPeer = null; }
   document.getElementById('remote-cam').srcObject = null;
   toast('Partner stopped their camera');
+});
+
+/* ═══════════════════════════════════
+   Screen stream (received from extension)
+═══════════════════════════════════ */
+function showStreamOverlay(visible) {
+  var overlay = document.getElementById('stream-overlay');
+  var viewBtn = document.getElementById('stream-view-btn');
+  overlay.classList.toggle('active', visible);
+  viewBtn.style.display = visible ? 'inline-flex' : 'none';
+}
+
+function teardownStream() {
+  if (streamPeer) { try { streamPeer.destroy(); } catch (_) {} streamPeer = null; }
+  var v = document.getElementById('stream-video');
+  v.srcObject = null;
+  document.getElementById('stream-unmute-btn').style.display = 'none';
+  showStreamOverlay(false);
+}
+
+socket.on('stream-start', function (d) {
+  var name = (d && d.name) || 'Partner';
+  toast(name + ' is sharing their screen ♡');
+  addSystemMsg(name + ' started screen sharing');
+
+  teardownStream();
+  showStreamOverlay(true);
+
+  streamPeer = new SimplePeer({
+    initiator: false, trickle: true,
+    config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] }
+  });
+  streamPeer.on('signal', function (sig) { socket.emit('stream-signal', sig); });
+  streamPeer.on('stream', function (s) {
+    var v = document.getElementById('stream-video');
+    v.srcObject = s;
+    v.muted = true;
+    v.play().catch(function () {});
+    document.getElementById('stream-unmute-btn').style.display = 'block';
+    toast('Screen connected ♡');
+  });
+  streamPeer.on('error', function () { teardownStream(); });
+  streamPeer.on('close', function () { teardownStream(); });
+});
+
+socket.on('stream-signal', function (d) {
+  if (streamPeer) streamPeer.signal(d);
+});
+
+socket.on('stream-stop', function () {
+  teardownStream();
+  toast('Partner stopped sharing');
+  addSystemMsg('Screen sharing ended');
+});
+
+document.getElementById('stream-unmute-btn').addEventListener('click', function () {
+  var v = document.getElementById('stream-video');
+  v.muted = false;
+  this.style.display = 'none';
+});
+
+document.getElementById('stream-view-btn').addEventListener('click', function () {
+  var overlay = document.getElementById('stream-overlay');
+  var isActive = overlay.classList.contains('active');
+  overlay.classList.toggle('active', !isActive);
+  this.classList.toggle('active', !isActive);
+  this.title = isActive ? 'Show partner\'s screen' : 'Hide stream';
 });
 
 /* Draggable webcam pip */

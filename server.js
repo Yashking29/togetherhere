@@ -324,6 +324,11 @@ io.on('connection', (socket) => {
   socket.on('cam-signal', (d) => socket.to(currentRoom).emit('cam-signal', d));
   socket.on('cam-stop',   ()  => socket.to(currentRoom).emit('cam-stop'));
 
+  /* ── Screen stream (relay only) ── */
+  socket.on('stream-start',  (d) => socket.to(currentRoom).emit('stream-start',  d));
+  socket.on('stream-signal', (d) => socket.to(currentRoom).emit('stream-signal', d));
+  socket.on('stream-stop',   ()  => socket.to(currentRoom).emit('stream-stop'));
+
   socket.on('disconnect', () => {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);
