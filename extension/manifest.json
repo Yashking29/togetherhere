@@ -11,6 +11,7 @@
     "*://*.amazon.com/*",
     "*://*.disneyplus.com/*",
     "*://*.hotstar.com/*",
+    "*://*.jiohotstar.com/*",
     "*://*.hulu.com/*",
     "https://togetherhere.online/*"
   ],
@@ -33,6 +34,7 @@
         "*://*.amazon.com/*",
         "*://*.disneyplus.com/*",
         "*://*.hotstar.com/*",
+        "*://*.jiohotstar.com/*",
         "*://*.hulu.com/*"
       ],
       "js": ["socket.io.min.js", "content.js"],
