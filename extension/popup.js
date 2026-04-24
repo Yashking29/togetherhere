@@ -5,8 +5,9 @@ const SUPPORTED = [
   'disneyplus.com', 'hotstar.com', 'hulu.com'
 ];
 
-let mode     = 'create'; // 'create' | 'join'
+let mode      = 'create'; // 'create' | 'join'
 let activeTab = null;
+let isSharing = false;
 
 /* ── Helpers ── */
 function sendToContent(msg) {
@@ -69,7 +70,15 @@ chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
     if (data.tg_room) {
       // Check if still active
       sendToContent({ action: 'status' }).then(res => {
-        if (res && res.roomId) showRoom(res.roomId, false, null);
+        if (res && res.roomId) {
+          showRoom(res.roomId, false, null);
+          if (res.sharing) {
+            isSharing = true;
+            const btn = document.getElementById('share-btn');
+            btn.textContent = '⏹ Stop Sharing';
+            btn.classList.add('sharing');
+          }
+        }
       });
     }
   });
@@ -143,9 +152,36 @@ document.getElementById('copy-btn').addEventListener('click', async () => {
   });
 });
 
+/* ── Share screen ── */
+document.getElementById('share-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('share-btn');
+  if (isSharing) {
+    btn.textContent = 'Stopping…';
+    btn.disabled = true;
+    await sendToContent({ action: 'stop-share' });
+    isSharing = false;
+    btn.textContent = '📺 Share Screen';
+    btn.classList.remove('sharing');
+    btn.disabled = false;
+  } else {
+    btn.textContent = 'Starting…';
+    btn.disabled = true;
+    const res = await sendToContent({ action: 'share-screen' });
+    btn.disabled = false;
+    if (res && res.ok) {
+      isSharing = true;
+      btn.textContent = '⏹ Stop Sharing';
+      btn.classList.add('sharing');
+    } else {
+      btn.textContent = '📺 Share Screen';
+    }
+  }
+});
+
 /* ── Leave ── */
 document.getElementById('leave-btn').addEventListener('click', async () => {
   await sendToContent({ action: 'leave' });
+  isSharing = false;
   chrome.storage.local.remove(['tg_room']);
   showSetup();
 });

@@ -306,6 +306,14 @@
     .history-play  { background:none;border:none;color:var(--muted);cursor:pointer;font-size:.8rem;padding:4px 6px;border-radius:4px;transition:color .15s,background .15s;flex-shrink:0; }
     .history-play:hover { color:var(--accent);background:var(--accent-dim); }
 
+    /* ── Screen share overlay ── */
+    #stream-overlay { position:absolute;inset:0;background:#000;z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center; }
+    #stream-overlay.active { display:flex; }
+    #stream-video { width:100%;height:100%;object-fit:contain; }
+    .stream-badge { position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(9,9,20,.88);border:1px solid rgba(244,114,182,.35);color:#f472b6;font-size:.7rem;padding:4px 14px;border-radius:100px;white-space:nowrap;pointer-events:none;letter-spacing:.03em; }
+    #stream-unmute-btn { position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(9,9,20,.92);border:1px solid rgba(244,114,182,.4);color:#f472b6;font-size:.78rem;padding:7px 18px;border-radius:100px;cursor:pointer;font-family:inherit;display:none;white-space:nowrap;transition:background .15s; }
+    #stream-unmute-btn:hover { background:rgba(244,114,182,.18); }
+
     /* ── Webcam PiP ── */
     #webcam-pip { position:fixed;bottom:90px;right:24px;width:220px;background:#0a0a14;border:1px solid var(--border-strong);border-radius:var(--radius);overflow:hidden;z-index:250;display:none;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.6);user-select:none; }
     #webcam-pip.active { display:flex; }
@@ -396,6 +404,12 @@
               <div class="placeholder-icon">&#9655;</div>
               <p>Paste a YouTube, Vimeo or direct video link below</p>
             </div>
+            <!-- Screen share overlay -->
+            <div id="stream-overlay">
+              <video id="stream-video" autoplay playsinline></video>
+              <div class="stream-badge">&#9671; Partner's Screen</div>
+              <button id="stream-unmute-btn">&#x1F50A; Click to enable audio</button>
+            </div>
             <div id="reaction-overlay"></div>
             <div id="subtitle-display"></div>
             <!-- Draw canvas -->
@@ -439,6 +453,10 @@
           <button class="btn-tool" id="cam-btn" title="Webcam PiP">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
             Cam
+          </button>
+          <button class="btn-tool" id="stream-view-btn" title="Viewing partner's screen" style="display:none;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            Viewing
           </button>
           <button class="btn-tool" id="draw-toggle-btn" title="Draw on screen">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>

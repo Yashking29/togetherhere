@@ -125,6 +125,11 @@
       color: #f87171;
     }
     .btn-leave:hover { background: rgba(248,113,113,.15); }
+    .btn-share.sharing {
+      background: rgba(244,114,182,.18);
+      border-color: rgba(244,114,182,.4);
+      color: #f472b6;
+    }
 
     .divider { height: 1px; background: var(--border); }
     #join-row { display: none; }
@@ -166,6 +171,7 @@
     <div class="room-id" id="room-id-text"></div>
     <div class="divider"></div>
     <button class="btn-ghost" id="copy-btn">&#128279; Copy Invite Link</button>
+    <button class="btn-ghost btn-share" id="share-btn">&#128250; Share Screen</button>
     <button class="btn-ghost btn-leave" id="leave-btn">Leave Room</button>
   </div>
 
