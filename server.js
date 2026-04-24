@@ -99,6 +99,37 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 /* ── Routes ── */
+app.get('/dev/rooms', (_req, res) => {
+  try {
+    const raw  = JSON.parse(fs.readFileSync(ROOMS_FILE, 'utf8'));
+    const live = {};
+    for (const [id, room] of rooms.entries()) {
+      live[id] = { onlineUsers: room.users.size };
+    }
+    const out = Object.entries(raw).map(([id, r]) => ({
+      id,
+      createdAt:     new Date(r.createdAt).toLocaleString(),
+      onlineNow:     (live[id] || {}).onlineUsers || 0,
+      videoId:       r.videoId   || null,
+      videoType:     r.videoType || null,
+      queueLength:   (r.queue    || []).length,
+      historyLength: (r.history  || []).length,
+      hasNotes:      !!(r.notes  || '').trim(),
+    }));
+    res.json({ totalRooms: out.length, rooms: out });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
+app.get('/dev/rooms/raw', (_req, res) => {
+  try {
+    res.sendFile(ROOMS_FILE);
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
 app.get('*', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
