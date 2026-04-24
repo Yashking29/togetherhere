@@ -9,10 +9,10 @@
   <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
   <!-- Diamond shape -->
   <polygon
-    points="256,110 370,256 256,402 142,256"
+    points="256,90 422,256 256,422 90,256"
     fill="none"
     stroke="#fff"
-    stroke-width="28"
+    stroke-width="30"
     stroke-linejoin="round"
   />
 </svg>
