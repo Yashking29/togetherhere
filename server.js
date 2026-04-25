@@ -1,4 +1,5 @@
-const express  = require('express');
+const express   = require('express');
+const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const { nanoid } = require('nanoid');
@@ -15,6 +16,39 @@ function log(event, data) {
   const parts = Object.entries(data || {}).map(([k, v]) => k + '=' + v).join(' ');
   console.log('[' + ts + '] ' + event.padEnd(16) + (parts ? ' ' + parts : ''));
 }
+
+/* ── Bot / crawler block ── */
+const BOT_UA = /bot|crawler|spider|crawling|headless|python-requests|curl|wget|scrapy|zgrab|masscan|nmap/i;
+app.use((req, res, next) => {
+  const ua = req.headers['user-agent'] || '';
+  if (BOT_UA.test(ua)) {
+    log('BOT_BLOCKED', { ua: ua.slice(0, 80), ip: req.ip });
+    return res.status(403).end();
+  }
+  next();
+});
+
+/* ── Rate limiting ── */
+const generalLimit = rateLimit({
+  windowMs: 60 * 1000,   // 1 minute
+  max: 60,               // 60 requests per IP per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    log('RATE_LIMITED', { ip: req.ip, path: req.path });
+    res.status(429).json({ error: 'Too many requests — slow down' });
+  }
+});
+
+const devLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,               // stricter for the /dev endpoints
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/dev', devLimit);
+app.use(generalLimit);
 
 app.use(express.static(path.join(__dirname, 'public')));
 

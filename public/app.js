@@ -273,7 +273,15 @@ function loadMedia(id, type, autoplay) {
     if (!ytReady || !ytPlayer) { pendingLoad = { id: id, type: type, autoplay: autoplay }; return; }
     syncLock = true;
     ytPlayer.loadVideoById(id);
-    setTimeout(function () { if (!autoplay) ytPlayer.pauseVideo(); syncLock = false; }, 1000);
+    setTimeout(function () {
+      syncLock = false;
+      if (!autoplay) {
+        ytPlayer.pauseVideo();
+      } else if (currentRoom) {
+        // let partner know we're playing from wherever we are now
+        socket.emit('play', { time: ytPlayer.getCurrentTime() || 0 });
+      }
+    }, 1200);
   } else if (type === 'mp4') {
     setupHtml5(id, autoplay);
   } else if (type === 'vimeo') {
@@ -1034,7 +1042,7 @@ async function handleLoad() {
   var title = await fetchTitle(media.type, media.id);
   logEvent('video_loaded', { video_type: media.type });
   socket.emit('video-load', { videoId: media.id, videoType: media.type, title: title });
-  loadMedia(media.id, media.type, false);
+  loadMedia(media.id, media.type, true);
   document.getElementById('url-input').value = '';
 }
 
