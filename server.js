@@ -18,10 +18,12 @@ function log(event, data) {
 }
 
 /* ── Bot / crawler block ── */
-const BOT_UA = /bot|crawler|spider|crawling|headless|python-requests|curl|wget|scrapy|zgrab|masscan|nmap/i;
+const GOOD_BOTS = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebot|twitterbot|linkedinbot|whatsapp|telegrambot|applebot|discordbot/i;
+const BAD_BOTS  = /headless|python-requests|scrapy|zgrab|masscan|nmap|curl\/|wget\/|libwww|java\/|go-http|ruby|perl/i;
 app.use((req, res, next) => {
   const ua = req.headers['user-agent'] || '';
-  if (BOT_UA.test(ua)) {
+  if (GOOD_BOTS.test(ua)) return next(); // always allow search engines & social previews
+  if (BAD_BOTS.test(ua)) {
     log('BOT_BLOCKED', { ua: ua.slice(0, 80), ip: req.ip });
     return res.status(403).end();
   }
